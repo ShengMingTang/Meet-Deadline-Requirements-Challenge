@@ -142,7 +142,8 @@ def evaluate(solution_file, block_traces, network_trace, log_packet_file, config
         # config
         USE_CWND=config['USE_CWND'],
         # enable logging packet. You can train faster if ENABLE_LOG=False
-        ENABLE_LOG=config['ENABLE_LOG'],
+        # ENABLE_LOG=config['ENABLE_LOG'],
+        ENABLE_LOG=True, # !
 
         # Extra params
         **kwargs

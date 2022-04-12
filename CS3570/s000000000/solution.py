@@ -23,7 +23,7 @@ EVENT_TYPE_TEMP='T'
 # see https://github.com/AItransCompetition/simple_emulator#config
 config = {
     'USE_CWND': True, # bool
-    'ENABLE_LOG': True # bool
+    # 'ENABLE_LOG': True # bool
 }
 
 # Your solution should include block selection and bandwidth estimator.
