@@ -31,6 +31,8 @@ root
 |   |   --- output (produced at runtime)
 |       |
 |       |   --- run{i} (produced at runtime)
+|       |       | - output/*.png
+|       |       |
 |       |   --- ...
 |   --- s000000002
 |   .
@@ -54,6 +56,7 @@ root
 import argparse
 from cProfile import label
 from cgi import test
+from typing import NewType
 from simple_emulator import SimpleEmulator, create_emulator
 
 # We provided some function of plotting to make you analyze result easily in utils.py
@@ -76,7 +79,9 @@ import subprocess
 import os
 os.environ['KMP_DUPLICATE_LIB_OK'] = "TRUE"
 
-RANDOM_SEED = 0
+senderId = 1 # ! gloabal for tracking the current sender Id to evaluate
+RANDOM_SEED = 0 # ! random seed
+INSTALLED = False # ! toogle to True after run this once
 
 def cal_qoe(x=0, run_dir=None):
     block_data = []
@@ -102,6 +107,7 @@ def cal_qoe(x=0, run_dir=None):
             qoe -= x*priority
     return qoe
 def run_and_plot(emulator, network_trace, log_packet_file, **kwargs):
+
     # Run the emulator and you can specify the time for the emualtor's running.
     # It will run until there is no packet can sent by default.
     emulator.run_for_dur()
@@ -111,17 +117,34 @@ def run_and_plot(emulator, network_trace, log_packet_file, **kwargs):
 
     # Output the picture of emulator-analysis.png
     # You can get more information from https://github.com/AItransCompetition/simple_emulator/tree/master#emulator-analysispng.
-    # analyze_emulator(log_packet_file, file_range="all", sender=[1])
+    sender = [kwargs["senderId"]]
+    os.chdir(f'output/run{kwargs["run"]}')
+    files = list((Path('output')/'packet_log').glob('*.log'))
+    print(f'sender = {sender}, len = {len(files)}')
+    try:
+        analyze_emulator(log_packet_file, file_range=[len(files)], sender=sender)
+    except Exception as e:
+        print(f'analyze_emulator exception: {e}')
+    os.chdir('../..')
+
 
     # Output the picture of rate_changing.png
     # You can get more information from https://github.com/AItransCompetition/simple_emulator/tree/master#cwnd_changingpng
-    # plot_rate(log_packet_file, trace_file=network_trace, file_range="all", sender=[1])
+    nwTraceTemp = os.path.abspath(network_trace)
+    os.chdir(f'output/run{kwargs["run"]}')
+    try:
+        plot_rate(log_packet_file, trace_file=nwTraceTemp, file_range=[len(files)], sender=sender)
+    except Exception as e:
+        print(f'plot_Rate exception: {e}')
+    os.chdir('../..')
+
 
     print("Qoe : %d" % (cal_qoe(run_dir=kwargs['RUN_DIR'])) )
 def evaluate(solution_file, block_traces, network_trace, log_packet_file, config=None, second_block_file=None, **kwargs):
     # fixed random seed
     # import random
-    # random.seed(1)
+    # global RANDOM_SEED
+    # random.seed(RANDOM_SEED)
 
     # import the solution
     solution = importlib.import_module(solution_file)
@@ -143,11 +166,12 @@ def evaluate(solution_file, block_traces, network_trace, log_packet_file, config
         USE_CWND=config['USE_CWND'],
         # enable logging packet. You can train faster if ENABLE_LOG=False
         # ENABLE_LOG=config['ENABLE_LOG'],
-        ENABLE_LOG=True, # !
+        ENABLE_LOG=True, # ! always True for evaluating
 
         # Extra params
         **kwargs
     )
+
     run_and_plot(emulator, network_trace, log_packet_file, **kwargs)
 
 def testCaseGen(scenarios, backgrounds):
@@ -184,6 +208,10 @@ def TAevalSingle(dir):
         print(f'\t run {i} is running')
         with open(errFile, 'w') as sys.stderr:
             with open(runTimeLogFile, 'w') as sys.stdout:
+                # ! senderId and draw
+                kwargs['run'] = i
+                global senderId
+                kwargs['senderId'] = senderId
                 evaluate(
                     solution_file=solution_file,
                     block_traces=block_traces,
@@ -194,6 +222,9 @@ def TAevalSingle(dir):
 
                     **kwargs
                 )
+                # ! senderId come in static vars in simple_emulator.Sender
+                senderId += 2
+
         sys.stdout = sys.__stdout__
         sys.stderr = sys.__stderr__
         print(f'\t run {i} evaluated')
@@ -239,21 +270,25 @@ if __name__ == '__main__':
         writer.writerow(['studentID', *[f'run{i}' for i in range(numTestCases)], 'totalQoe'])
         for dir in students:
             env = f'Env_{str(dir)}'
-            req = str(dir/'requirements.txt')
-            subprocess.run(['conda', 'env', 'remove', '--name', env, '-y'])
-            subprocess.run(['conda', 'create', '--name', env, '-y'])
-            subprocess.run(['conda', 'activate', env])
-            # subprocess.run(['conda', 'init', 'powershell'])
-            subprocess.run(['conda', 'config', '--env', '--set', 'always_yes', 'true'])
-            subprocess.run(['conda', 'install', 'pip'])
-            # subprocess.run(['conda', 'config', '--append', 'channels', 'conda-forge'])
-            subprocess.run(['pip', 'install', '-r', req])
+            # ! comment out the following untilk "try" if you have installed
+            if INSTALLED is False:
+                req = str(dir/'requirements.txt')
+                subprocess.run(['conda', 'env', 'remove', '--name', env, '-y'])
+                subprocess.run(['conda', 'create', '--name', env, '-y'])
+                subprocess.run(['conda', 'activate', env])
+                # subprocess.run(['conda', 'init', 'powershell'])
+                subprocess.run(['conda', 'config', '--env', '--set', 'always_yes', 'true'])
+                subprocess.run(['conda', 'install', 'pip'])
+                # subprocess.run(['conda', 'config', '--append', 'channels', 'conda-forge'])
+                subprocess.run(['pip', 'install', '-r', req])
             try:
                 stat = TAevalSingle(dir)
                 print(f'{dir} qoe = {stat["qoe"]}')
                 writer.writerow([dir.stem, *(stat['qoe']), np.sum(np.array(stat["qoe"]))])
             except Exception as e:
-                print(f'{str(dir)} raise ')
-            subprocess.run(['conda', 'deactivate', env])
-            subprocess.run(['conda', 'env', 'remove', '--name', env, '-y'])
+                print(f'{str(dir)} raise')
+            # ! comment out the following if you have installed
+            if INSTALLED is False:
+                subprocess.run(['conda', 'deactivate', env])
+                subprocess.run(['conda', 'env', 'remove', '--name', env, '-y'])
 
