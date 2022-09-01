@@ -101,5 +101,5 @@ def generateScenarios(dur: int, totalTime: float, num: int):
 
 
 if __name__ == '__main__':
-    generateBackground(5, 20.0, 2)
-    generateScenarios(5, 20.0, 2)
+    generateBackground(5, 20.0, 5)
+    generateScenarios(5, 20.0, 5)

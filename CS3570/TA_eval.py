@@ -82,6 +82,8 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = "TRUE"
 senderId = 1 # ! gloabal for tracking the current sender Id to evaluate
 RANDOM_SEED = 0 # ! random seed
 INSTALLED = False # ! toogle to True after run this once
+DO_EVAL = True
+RM_ENV = False
 
 def cal_qoe(x=0, run_dir=None):
     block_data = []
@@ -141,10 +143,6 @@ def run_and_plot(emulator, network_trace, log_packet_file, **kwargs):
 
     print("Qoe : %d" % (cal_qoe(run_dir=kwargs['RUN_DIR'])) )
 def evaluate(solution_file, block_traces, network_trace, log_packet_file, config=None, second_block_file=None, **kwargs):
-    # fixed random seed
-    # import random
-    # global RANDOM_SEED
-    # random.seed(RANDOM_SEED)
 
     # import the solution
     solution = importlib.import_module(solution_file)
@@ -152,6 +150,10 @@ def evaluate(solution_file, block_traces, network_trace, log_packet_file, config
     # Use the object you created above
     my_solution = solution.MySolution()
 
+    # fixed random seed
+    import random
+    global RANDOM_SEED
+    random.seed(RANDOM_SEED)
     # Create the emulator using your solution
     # Set second_block_file=None if you want to evaluate your solution in situation of single flow
     # Specify ENABLE_LOG to decide whether or not output the log of packets. ENABLE_LOG=True by default.
@@ -185,7 +187,9 @@ def testCaseGen(scenarios, backgrounds):
 def TAevalSingle(dir):
     print(f'evaluating {str(dir)}')
     
+    print('ch dir')
     os.chdir(dir)
+    print('ch dir finished')
     
     solution_file = f'{dir}.solution'
     solModule = importlib.import_module(solution_file)
@@ -260,7 +264,7 @@ if __name__ == '__main__':
     print(f'Used testcases: {numTestCases}')
     print('============== TA Info ==============')
 
-    students = list(root.glob('s[0-9]*/'))
+    students = list(root.glob('s[0-9]*'))
     excluded = ['s000000000'] # ! excluded list
     students = list(filter(lambda x: not (x.stem in excluded), students))
 
@@ -270,7 +274,9 @@ if __name__ == '__main__':
         writer.writerow(['studentID', *[f'run{i}' for i in range(numTestCases)], 'totalQoe'])
         for dir in students:
             env = f'Env_{str(dir)}'
-            # ! comment out the following untilk "try" if you have installed
+            
+            print(f'=========== Create {env} ===========')
+
             if INSTALLED is False:
                 req = str(dir/'requirements.txt')
                 subprocess.run(['conda', 'env', 'remove', '--name', env, '-y'])
@@ -281,14 +287,17 @@ if __name__ == '__main__':
                 subprocess.run(['conda', 'install', 'pip'])
                 # subprocess.run(['conda', 'config', '--append', 'channels', 'conda-forge'])
                 subprocess.run(['pip', 'install', '-r', req])
-            try:
-                stat = TAevalSingle(dir)
-                print(f'{dir} qoe = {stat["qoe"]}')
-                writer.writerow([dir.stem, *(stat['qoe']), np.sum(np.array(stat["qoe"]))])
-            except Exception as e:
-                print(f'{str(dir)} raise')
-            # ! comment out the following if you have installed
-            if INSTALLED is False:
-                subprocess.run(['conda', 'deactivate', env])
+            if DO_EVAL:
+                try:
+                    subprocess.run(['conda', 'activate', env])
+                    stat = TAevalSingle(dir)
+                    print(f'{dir} qoe = {stat["qoe"]}')
+                    writer.writerow([dir.stem, *(stat['qoe']), np.sum(np.array(stat["qoe"]))])
+                    subprocess.run(['conda', 'deactivate', env])
+                except Exception as e:
+                    print(f'{str(dir)} raise')
+            
+            if RM_ENV:
                 subprocess.run(['conda', 'env', 'remove', '--name', env, '-y'])
+            
 
